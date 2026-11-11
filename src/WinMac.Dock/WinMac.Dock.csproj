@@ -10,6 +10,8 @@
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks><ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
+  <!-- These development checks depend on an unpublished instrumentation harness. -->
+  <ItemGroup><Compile Remove="**/*Checks.cs;SeparatorSpacingAudit.cs" /></ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" /><PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="1.8.260709004" /><PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="1.8.25122902" /><ProjectReference Include="../WinMac.Dock.Core/WinMac.Dock.Core.csproj" /><ProjectReference Include="../WinMac.Dock.Icons/WinMac.Dock.Icons.csproj" /></ItemGroup>
   <!-- Use Win2D's renderer with the existing modular Windows App SDK references. -->
   <ItemGroup>

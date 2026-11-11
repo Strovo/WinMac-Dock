@@ -203,6 +203,9 @@ internal sealed partial class SettingsWindow : Window
         displayScopeNotes.Clear();
         Header("General", "Changes apply immediately. Cancel restores the last applied settings.");
         AddToggle("Show tray icon", dock.Settings.ShowTrayIcon, value => { dock.Settings.ShowTrayIcon = value; PreviewSettings(); });
+        AddToggle("Clock in dock", dock.Settings.DesktopClock.Enabled, value => { dock.Settings.DesktopClock.Enabled = value; PreviewSettings(); });
+        AddToggle("Clock in dock: 24-hour format", dock.Settings.DesktopClock.Use24Hour, value => { dock.Settings.DesktopClock.Use24Hour = value; PreviewSettings(); });
+        AddToggle("Clock in dock: show seconds", dock.Settings.DesktopClock.ShowSeconds, value => { dock.Settings.DesktopClock.ShowSeconds = value; PreviewSettings(); });
         var theme = AddRow("Appearance", new ComboBox { ItemsSource = new[] { "Windows default", "Light", "Dark" }, SelectedIndex = (int)dock.Settings.Theme });
         theme.SelectionChanged += (_, _) => { if (theme.SelectedIndex >= 0) { dock.Settings.Theme = (DockTheme)theme.SelectedIndex; chrome.Root.RequestedTheme = dock.Settings.Theme switch { DockTheme.Light => ElementTheme.Light, DockTheme.Dark => ElementTheme.Dark, _ => ElementTheme.Default }; PreviewSettings(); } };
         AddBackdropControls();
@@ -382,6 +385,7 @@ internal sealed partial class SettingsWindow : Window
         }
         (string Category, string Section, string Description) Classify(string text, string currentCategory, string currentSection)
         {
+            if (text.StartsWith("Clock in dock", StringComparison.Ordinal)) return ("General", "Clock in dock", "Show the local time and date inside the dock, after the last icon. The clock moves and hides with the dock; no floating widget is created.");
             if (text.StartsWith("Hold Shift to drag items outside", StringComparison.OrdinalIgnoreCase)) return ("Behaviour", "Items", "Choose how dock items can be moved and removed.");
             if (text.StartsWith("Keep dock visible when peeking", StringComparison.OrdinalIgnoreCase)) return ("Behaviour", "Visibility", "Control when the dock stays visible and how it returns.");
             if (text == "Use the entire screen edge to reveal or hide the dock") return ("Behaviour", "Visibility", "Control when the dock stays visible and how it returns.");

@@ -112,14 +112,15 @@ internal sealed partial class DockWindow
         if (entries.Count > pins && (pins == 0 || entries[pins - 1].Item.Kind != ItemKind.Separator)) { flags.Insert(pins, false); if (index >= pins) index++; }
         double rowMargins = (Vertical ? Settings.DockMarginTop + Settings.DockMarginBottom : Settings.DockMarginLeft + Settings.DockMarginRight) / scale;
         double crossMargins = (Vertical ? Settings.DockMarginLeft + Settings.DockMarginRight : Settings.DockMarginTop + Settings.DockMarginBottom) / scale;
-        double available = (Vertical ? monitor.Work.Height : monitor.Work.Width) / scale - rowMargins;
+        double available = (Vertical ? monitor.Work.Height : monitor.Work.Width) / scale - rowMargins - ClockReservation;
         var fit = DockAutoFit.Calculate(Settings.IconSize, Settings.WindowsTaskbarHighlights ? 20 : 12, flags, Settings.IconSpacing, available,
             Motion && DisplayMagnificationEnabled ? Settings.HoverMagnificationPercent : 0, Settings.MagnificationSpan, SeparatorWidth);
         double spacing = DockAutoFit.Spacing(Settings.IconSpacing, fit.IconSize, Settings.IconSize);
         double button = fit.IconSize + fit.Padding;
         var widths = flags.Select(icon => icon ? button : SeparatorWidth).ToArray();
         double start = DockSpacing.Starts(widths, flags, spacing)[index];
-        int length = Math.Min(DockGeometry.Pixels(DockSpacing.Length(widths, flags, spacing) + rowMargins, scale),
+        int length = Math.Min(DockGeometry.Pixels(DockSpacing.Length(widths, flags, spacing) + rowMargins
+            + DesktopClock.AlongLength(Settings.DesktopClock, Vertical, button) + (Settings.DesktopClock.Enabled ? Math.Max(0, spacing) : 0), scale),
             Vertical ? monitor.Work.Height : monitor.Work.Width);
         var panel = DockGeometry.PlaceEdge(appbar.IsRegistered ? appbar.Area : monitor.Work, length,
             DockGeometry.Pixels(button + crossMargins + (fit.Overflow ? 16 : 0), scale), PositionEdge, Settings.FloatingGap, PositionAlignment);

@@ -35,7 +35,7 @@ internal sealed partial class DockWindow
         var display = displays.FirstOrDefault(m => (m.Device == SelectedMonitor || m.Identity == SelectedMonitor)) ?? displays.FirstOrDefault(m => m.Primary) ?? displays[0];
         var flags = DownloadPinLayout.IconFlags(entries);
         double margins = Vertical ? Settings.DockMarginTop + Settings.DockMarginBottom : Settings.DockMarginLeft + Settings.DockMarginRight;
-        double available = ((Vertical ? display.Work.Height : display.Work.Width) - margins) / display.Scale;
+        double available = ((Vertical ? display.Work.Height : display.Work.Width) - margins) / display.Scale - ClockReservation;
         var fit = DockAutoFit.Calculate(Settings.IconSize, Settings.WindowsTaskbarHighlights ? 20 : 12, flags, Settings.IconSpacing, available,
             Motion && DisplayMagnificationEnabled ? Settings.HoverMagnificationPercent : 0, Settings.MagnificationSpan, 1 / display.Scale);
         fit = DockAutoFit.PixelAligned(fit, display.Scale);

@@ -102,6 +102,7 @@ internal sealed partial class DockWindow : Window
     public ClickActions ClickActionsFor(DockEntry entry) => Settings.DefaultClickActions;
     public nint Handle { get; }
     public DockSettings Settings { get; }
+    internal DockClockView ClockView { get; }
     public double AvailablePopupHeight => Math.Max(200, Math.Min(620, monitor.Work.Height / scale - 120));
     public double AvailableFolderPopupHeight => Math.Max(200, monitor.Work.Height / scale - 120);
     public double AvailablePopupWidth => Math.Max(240, monitor.Work.Width / scale - 32);
@@ -154,6 +155,7 @@ internal sealed partial class DockWindow : Window
         try { Settings = sharedSettings ?? LoadStartupSettings(); }
         catch (Exception ex) { Log.Write(ex); Settings = Defaults(); if (File.Exists(store.Path)) File.Copy(store.Path, store.Path + ".invalid-" + DateTime.Now.ToString("yyyyMMddHHmmss"), true); }
         // Also cover shared settings and the fallback after a load error.
+        ClockView = new DockClockView(() => Settings.DesktopClock);
         // Persist before creating controls or allowing settings edits.
         if (!File.Exists(store.Path))
         {
@@ -467,6 +469,7 @@ internal sealed partial class DockWindow : Window
         monitor = ResolveDisplay();
         tray.Visible = MonitorOverride == null && Settings.ShowTrayIcon;
         Settings.Validate();
+
         if (previousHideMode != DisplayHideMode)
         {
             edgeToggleHidden = hidden; edgeActivation.Reset(); previousHideMode = DisplayHideMode;
@@ -546,7 +549,7 @@ internal sealed partial class DockWindow : Window
             ResetMagnification();
             Settings.Items.Add(item); Save();
             var firstTask = buttons.FirstOrDefault(b => !b.Entry.IsPinned).Button;
-            int insertion = firstTask == null ? strip.Children.Count : strip.Children.IndexOf(firstTask);
+            int insertion = firstTask == null ? (ClockView.Parent == strip ? strip.Children.IndexOf(ClockView) : strip.Children.Count) : strip.Children.IndexOf(firstTask);
             if (insertion > 0 && strip.Children[insertion - 1] is Border { Tag: null }) insertion--;
             AddButton(new DockEntry(item, null, true));
             var added = buttons[^1].Button;
@@ -574,10 +577,14 @@ internal sealed partial class DockWindow : Window
         while (index > 0 && Settings.Items[index - 1].Kind == ItemKind.Separator) index--;
         return index;
     }
-    private List<TaskWindow> ReadDockWindows(bool? allDesktops = null)
+    private List<TaskWindow> ReadDockWindows(bool? allDesktops = null, bool allMonitors = false)
     {
         var tasks = tracker.Read(allDesktops);
         tasks.RemoveAll(Settings.Exclusions.Matches);
+        // Filter individual windows before grouping or matching pinned launchers.
+        // MonitorFromWindow uses the restore position for minimized windows.
+        if (Settings.ShowOnAllMonitors && !allMonitors)
+            tasks.RemoveAll(task => Native.MonitorFromWindow(task.Handle, 2) != monitor.Handle);
         return tasks;
     }
 
@@ -598,7 +605,8 @@ internal sealed partial class DockWindow : Window
         try
         {
                 windows = startupShellReady ? ReadDockWindows() : [];
-            if (startupShellReady && MonitorOverride == null && (MinimizedOnly || minimizedTabs.Removed.Count > 0)) minimizedTabs.Sync(Settings, ReadDockWindows(true));
+            // The primary dock coordinates Windows taskbar tabs globally.
+            if (startupShellReady && MonitorOverride == null && (MinimizedOnly || minimizedTabs.Removed.Count > 0)) minimizedTabs.Sync(Settings, ReadDockWindows(true, allMonitors: true));
             // Keep task order stable while foreground/Z-order changes.
             var previous = buttons.SelectMany(x => x.Entry.Windows).Select(w => w.Handle).ToList();
             windows = windows.OrderBy(w => { var i = previous.IndexOf(w.Handle); return i < 0 ? int.MaxValue : i; }).ToList();
@@ -624,7 +632,7 @@ internal sealed partial class DockWindow : Window
             bool fitChanged = UpdateAutoFit(entries);
             var liveTasks = entries.Where(e => !e.IsPinned).Select(e => e.Item.Id).ToHashSet();
             if (startupShellReady) SyncStackWatchers();
-            var signature = IconPixels + ":" + ButtonSize + ":" + DisplaySpacing + ":" + dockOverflow + ":" + string.Join("|", entries.Select(x => $"{x.Item.Id}:{string.Join(',', x.Windows.Select(w => w.Handle))}:{(x.IsPinned ? x.Item.Name : "")}:{x.Item.CustomIcon}:{x.Item.DarkModeIcon}:{x.Item.ShowThumbnail}:{x.Item.AttachedDriveKind}:{x.Item.Folder.StackIcon}:{x.Item.Folder.ShowDownloadsIconUnderStack}:{x.Item.Folder.Sort}:{x.Item.Folder.Descending}:{MissingTargetForRow(x)}"));
+            var signature = Settings.DesktopClock.Enabled + ":" + IconPixels + ":" + ButtonSize + ":" + DisplaySpacing + ":" + dockOverflow + ":" + string.Join("|", entries.Select(x => $"{x.Item.Id}:{string.Join(',', x.Windows.Select(w => w.Handle))}:{(x.IsPinned ? x.Item.Name : "")}:{x.Item.CustomIcon}:{x.Item.DarkModeIcon}:{x.Item.ShowThumbnail}:{x.Item.AttachedDriveKind}:{x.Item.Folder.StackIcon}:{x.Item.Folder.ShowDownloadsIconUnderStack}:{x.Item.Folder.Sort}:{x.Item.Folder.Descending}:{MissingTargetForRow(x)}"));
             bool entriesChanged = signature != lastSignature;
             if (!entriesChanged)
                 foreach (var existing in buttons.Where(b => !b.Entry.IsPinned))
@@ -664,6 +672,7 @@ internal sealed partial class DockWindow : Window
                     AddButton(entry);
                     previousEntry = entry;
                 }
+                if (Settings.DesktopClock.Enabled) strip.Children.Add(ClockView);
                 Reposition(fitChanged);
                 if (resumeHover)
                 {
@@ -1268,7 +1277,7 @@ internal sealed partial class DockWindow : Window
         double position = Math.Clamp(origin + Along(pointer) - Along(dragStartRoot), minimum, Math.Max(minimum, end - length));
         draggedVisual.RenderTransform = new TranslateTransform { X = Vertical ? 0 : position - origin, Y = Vertical ? position - origin : 0 };
     }
-    private double DragElementLength(FrameworkElement child) => child is Button ? ButtonSize : SeparatorWidth;
+    private double DragElementLength(FrameworkElement child) => DockElementLength(child);
     private void CaptureDragRestingLayout()
     {
         // Use the same layout model as Reposition and magnification. Visual
@@ -1606,6 +1615,7 @@ internal sealed partial class DockWindow : Window
         try
         {
             monitor = ResolveDisplay(); scale = monitor.Scale;
+            ClockView.Configure(Vertical, ButtonSize, ButtonCrossSize);
             var baseHeight = CurrentDockThickness;
             var expandedHeight = baseHeight + (HoverEnvelope ? HoverEnvelopeOverflow : 0);
             strip.Spacing = Math.Max(0, DisplaySpacing);
@@ -1658,7 +1668,7 @@ internal sealed partial class DockWindow : Window
                 : new PixelRect(Math.Max(area.Left, monitor.Work.Left), area.Top, Math.Min(area.Right, monitor.Work.Right), area.Bottom);
             var rowStart = Vertical ? MarginDip(Settings.DockMarginTop) : MarginDip(Settings.DockMarginLeft);
             var rowEnd = Vertical ? MarginDip(Settings.DockMarginBottom) : MarginDip(Settings.DockMarginRight);
-            var widthDips = DockSpacing.Length(layoutChildren.Select(e => e is Button ? ButtonSize : SeparatorWidth).ToArray(), layoutChildren.Select(e => e is Button).ToArray(), DisplaySpacing) + rowStart + rowEnd;
+            var widthDips = DockSpacing.Length(layoutChildren.Select(DockElementLength).ToArray(), layoutChildren.Select(e => e is Button).ToArray(), DisplaySpacing) + rowStart + rowEnd;
             var width = spanDockLength ? (Vertical ? placementArea.Height : placementArea.Width) : Math.Min(DockGeometry.Pixels(widthDips, scale), Vertical ? placementArea.Height : placementArea.Width);
             resting = DockGeometry.PlaceEdge(placementArea, width, DockGeometry.Pixels(baseHeight, scale), PositionEdge, Settings.FloatingGap, PositionAlignment);
             if (!hoverLayoutExpanded || hoverWave == null) visibleBounds = resting;
@@ -2825,6 +2835,7 @@ internal sealed partial class DockWindow : Window
     }
     private void Cleanup()
     {
+        ClockView.Stop();
         if (closing) return; ClearShellAnimatedIcons(); closing = true;  usbPinTimer.Stop(); StopRowTransition(); StopIndicatorAnimations(); StopHoverRendering(); downloadPinTimer.Stop(); downloadChangeTimer.Stop(); foreach (var watcher in downloadPinWatchers.Values) watcher.Dispose(); downloadPinWatchers.Clear(); downloadTrackers.Clear(); visibilityTimer.Stop(); reconcileTimer.Stop(); safetyTimer.Stop(); themeTimer.Stop(); recycleTimer.Stop();
         if (desktopPeekHook != 0) { Native.UnhookWinEvent(desktopPeekHook); desktopPeekHook = 0; }
         Native.SetPropW(Handle, "WinMac.Dock.HideWindowsTaskbar", 0); windowsTaskbar.Dispose();

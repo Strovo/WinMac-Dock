@@ -5,6 +5,7 @@ public partial class App : Application
 {
     internal static DockWindow? Dock { get; private set; }
     private static readonly List<DockWindow> secondaryDocks = [];
+
     private static bool syncing, syncQueued;
     private DispatcherTimer? monitorTimer;
     private static string displayTopology = "";
@@ -29,6 +30,7 @@ public partial class App : Application
             var topology = string.Join("|", monitors.Select(m => $"{m.Identity}:{m.Device}:{m.Bounds}:{m.Work}:{m.Scale}:{m.Primary}"));
             bool topologyChanged = displayTopology != topology;
             displayTopology = topology;
+
             var home = monitors.FirstOrDefault(m => m.Identity == Dock.Settings.Monitor || m.Device == Dock.Settings.Monitor) ?? monitors.FirstOrDefault(m => m.Primary) ?? monitors[0];
             if (Dock.Settings.Monitor == home.Device) Dock.Settings.Monitor = home.Identity;
             var wanted = Dock.Settings.ShowOnAllMonitors ? monitors.Where(m => m.Identity != home.Identity).Select(m => m.Identity).ToHashSet() : [];
@@ -58,6 +60,7 @@ public partial class App : Application
     }
     private static void CheckStartupRegistration()
     {
+        if (Program.SmokeTestDirectory != null) return;
         if (startupRegistrationChecked || Dock == null || !Dock.StartupComplete || secondaryDocks.Any(d => !d.StartupComplete)) return;
         startupRegistrationChecked = true;
         _ = Task.Run(() =>
@@ -77,6 +80,7 @@ public partial class App : Application
     internal static void CloseSecondaryDocks()
     {
         syncing = true;
+
         foreach (var dock in secondaryDocks.ToArray()) dock.Close();
         secondaryDocks.Clear();
     }
@@ -88,6 +92,15 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         Dock = new DockWindow();
+        if (Program.SmokeTestDirectory != null)
+        {
+            Dock.Settings.DesktopClock.Enabled = true;
+            Dock.Settings.DesktopClock.ShowSeconds = true;
+            Dock.Settings.HideMode = HideMode.AlwaysVisible;
+            Dock.Settings.ReserveSpace = false;
+            Dock.Settings.HideWindowsTaskbar = false;
+            Dock.Settings.StartAtLogin = false;
+        }
         Program.CommandReceived += command => Dock.DispatcherQueue.TryEnqueue(() => Dock.HandleCommand(command));
         Dock.StartupReady += () => Dock.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
@@ -96,6 +109,7 @@ public partial class App : Application
             monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             monitorTimer.Tick += (_, _) => SyncDocks(); monitorTimer.Start();
             CheckStartupRegistration();
+            if (Program.SmokeTestDirectory != null) _ = VerifyPublishedClock();
         });
         Dock.Initialize();
         // InitializeFully shows the dock only after startup artwork has loaded.
@@ -104,7 +118,7 @@ public partial class App : Application
 
 internal static class Log
 {
-    public static readonly string DirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "Dock");
+    public static readonly string DirectoryPath = Program.SmokeTestDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinMac", "Dock");
     private static readonly RotatingLineLog file = new(Path.Combine(DirectoryPath, "WinMac.Dock.log"), legacyPath: Path.Combine(DirectoryPath, "dock.log"));
     public static void Write(Exception ex) => Write(ex.ToString());
     public static void Write(string message) { try { file.Write(DateTimeOffset.Now + " " + message); } catch { } }

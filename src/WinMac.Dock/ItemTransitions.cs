@@ -82,6 +82,14 @@ internal sealed partial class DockWindow
         }
         int divider = 0;
         foreach (var separator in strip.Children.OfType<Border>()) Add("divider:" + divider++, separator);
+        if (ClockView.Parent == strip)
+        {
+            foreach (var text in new[] { ClockView.TimeLabel, ClockView.DateLabel })
+            {
+                var bounds = text.TransformToVisual(root).TransformBounds(new Windows.Foundation.Rect(0, 0, text.ActualWidth, text.ActualHeight));
+                Add(text == ClockView.TimeLabel ? "dock-clock:time" : "dock-clock:date", text, bounds);
+            }
+        }
         return new(MaterialPanel, hostBounds, sprites.ToArray(), dockOverflow, PositionEdge, scale);
     }
     private Windows.Foundation.Rect OffsetRowBounce(Windows.Foundation.Rect bounds, string key, double factor = 1)

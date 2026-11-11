@@ -6,10 +6,16 @@ internal static class Program
 {
     public static event Action<string>? CommandReceived;
     public static string StartupCommand { get; private set; } = "--startup";
+    internal static string? SmokeTestDirectory { get; private set; }
     [STAThread]
     public static void Main(string[] args)
     {
         StartupCommand = args.FirstOrDefault() ?? "--startup";
+        if (StartupCommand == "--smoke-test")
+        {
+            if (args.Length != 2 || !Path.IsPathFullyQualified(args[1])) { Environment.ExitCode = 1; return; }
+            SmokeTestDirectory = Path.GetFullPath(args[1]);
+        }
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Write(e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject.ToString()));
         if (args.Length >= 2 && args[0] == "--wait-for-exit" && int.TryParse(args[1], out int parentId))
         {
@@ -18,7 +24,7 @@ internal static class Program
             args = args.Skip(2).ToArray();
         }
         StartupCommand = args.FirstOrDefault() ?? "--startup";
-        if (StartupCommand is not ("--startup" or "--sync-startup" or "--show" or "--hide" or "--toggle" or "--settings" or "--about" or "--reload" or "--elevate" or "--exit")) return;
+        if (StartupCommand is not ("--startup" or "--sync-startup" or "--show" or "--hide" or "--toggle" or "--settings" or "--about" or "--reload" or "--elevate" or "--exit" or "--smoke-test")) return;
         if (StartupCommand == "--sync-startup")
         {
             try
@@ -29,8 +35,9 @@ internal static class Program
             catch (Exception ex) { Log.Write(ex); Environment.ExitCode = 1; }
             return;
         }
-        using var mutex = new Mutex(true, "Local\\WinMac.Dock." + Environment.UserName, out var first);
-        var pipeName = "WinMac.Dock." + Environment.UserName;
+        var instance = Environment.UserName + (SmokeTestDirectory == null ? "" : ".SmokeTest." + Environment.ProcessId);
+        using var mutex = new Mutex(true, "Local\\WinMac.Dock." + instance, out var first);
+        var pipeName = "WinMac.Dock." + instance;
         if (!first)
         {
             try { using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.Out); pipe.Connect(3000); using var writer = new StreamWriter(pipe) { AutoFlush = true }; writer.WriteLine(args.FirstOrDefault() ?? "--show"); }

@@ -134,6 +134,7 @@ public sealed record DisplayDockLayout
 
 public sealed record DockSettings
 {
+    public DesktopClockSettings DesktopClock { get; set; } = new();
     public bool KeepVisibleOnDesktop { get; set; } = true;
     public Dictionary<string, DockItem> RememberedItemProperties { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public int Version { get; set; } = 1;
@@ -237,6 +238,7 @@ public sealed record DockSettings
 
     public void Validate()
     {
+        DesktopClock ??= new();
         DisplayLayouts = new(DisplayLayouts ?? new(), StringComparer.OrdinalIgnoreCase);
         foreach (var key in DisplayLayouts.Keys.ToArray())
         {

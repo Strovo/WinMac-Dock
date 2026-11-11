@@ -141,10 +141,10 @@ internal sealed partial class DockWindow
         hoverClip = null;
         root.UpdateLayout();
         var children = strip.Children.OfType<FrameworkElement>().ToArray();
-        var starts = DockSpacing.Starts(children.Select(e => e is Button ? ButtonSize : SeparatorWidth).ToArray(), children.Select(e => e is Button).ToArray(), DisplaySpacing);
+        var starts = DockSpacing.Starts(children.Select(DockElementLength).ToArray(), children.Select(e => e is Button).ToArray(), DisplaySpacing);
         double rowStart = Vertical ? MarginDip(Settings.DockMarginTop) : MarginDip(Settings.DockMarginLeft);
         double rowEnd = Vertical ? MarginDip(Settings.DockMarginBottom) : MarginDip(Settings.DockMarginRight);
-        double rowContent = DockSpacing.Length(children.Select(e => e is Button ? ButtonSize : SeparatorWidth).ToArray(), children.Select(e => e is Button).ToArray(), DisplaySpacing);
+        double rowContent = DockSpacing.Length(children.Select(DockElementLength).ToArray(), children.Select(e => e is Button).ToArray(), DisplaySpacing);
         double rowExtent = (Vertical ? resting.Height : resting.Width) / scale;
         double rowOffset = PositionAlignment switch
         {
@@ -288,7 +288,7 @@ internal sealed partial class DockWindow
                 }
             }
         }
-        hoverWave = new MagnificationWave(children.Select(e => e is Button ? ButtonSize : SeparatorWidth).ToArray(),
+        hoverWave = new MagnificationWave(children.Select(DockElementLength).ToArray(),
             children.Select(e => e is Button).ToArray(), DisplaySpacing);
         hoverAvailableExpansion = Math.Max(0, (Vertical ? hostBounds.Height : hostBounds.Width) / scale - rowContent - rowStart - rowEnd);
         hoverLayoutStamp = CaptureHoverLayout();
