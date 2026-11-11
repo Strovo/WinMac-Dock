@@ -91,6 +91,8 @@ public partial class App : Application
     }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        try { StartTaskbarAppearance.Recover(); }
+        catch (Exception error) { Log.Write(error); }
         Dock = new DockWindow();
         if (Program.SmokeTestDirectory != null)
         {

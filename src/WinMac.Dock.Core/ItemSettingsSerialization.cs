@@ -35,7 +35,7 @@ internal static class ItemSettingsSerialization
             nameof(DockItem.CapturePin) => file && item.CapturePin != CapturePinKind.None,
             nameof(DockItem.Snipping) => application && (Prefix(item.AppUserModelId, "Microsoft.ScreenSketch_")
                 || Prefix(item.Target, @"shell:AppsFolder\Microsoft.ScreenSketch_") || Prefix(item.Target, "ms-screensketch:") || Executable(item, "SnippingTool.exe")),
-            nameof(DockItem.Id) or nameof(DockItem.Kind) or nameof(DockItem.Name) => true,
+            nameof(DockItem.Id) or nameof(DockItem.Kind) or nameof(DockItem.Name) or nameof(DockItem.MonitorIdentity) => true,
             _ => item.Kind != ItemKind.Separator
         };
         return relevant && value is not null && (value is not string text || text.Length > 0 || property == nameof(DockItem.Name));

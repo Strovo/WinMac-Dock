@@ -93,6 +93,9 @@ public sealed record DockItem
     public AdditionalCommandsVisibility EdgeFavoritesCommands { get; set; } = AdditionalCommandsVisibility.Submenu;
     public AdditionalCommandsVisibility ExplorerRecentCommands { get; set; } = AdditionalCommandsVisibility.Submenu;
     public AdditionalCommandsVisibility ExplorerPinnedCommands { get; set; } = AdditionalCommandsVisibility.Submenu;
+    // Empty scope is a legacy/shared pin; otherwise use the stable display identity,
+    // never a volatile \\.\DISPLAYn device name.
+    public string MonitorIdentity { get; set; } = "";
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public ItemKind Kind { get; set; }
     public string Name { get; set; } = "Item";

@@ -13,5 +13,5 @@ public static class ItemPreferences
     }
     public static DockItem? Restore(DockSettings settings, DockItem item, string? module = null) =>
         settings.RememberedItemProperties.TryGetValue(Key(item, module), out var saved)
-            ? Copy(saved) with { Id = item.Id, IsDownloadedPin = item.IsDownloadedPin } : null;
+            ? Copy(saved) with { Id = item.Id, MonitorIdentity = item.MonitorIdentity, IsDownloadedPin = item.IsDownloadedPin } : null;
 }

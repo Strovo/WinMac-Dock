@@ -5,4 +5,6 @@ artifacts/
 # Local installed packages, rollback copies and machine-specific test reports.
 /WinMac-Dock-reloj-integrado-x64/
 /WinMac-Dock-reloj-integrado-x64.before-monitor-filter/
+/WinMac-Dock-reloj-integrado-x64.before-*/
 /test-results/
+/tests/WinMac.Dock.Start.Tests/reports/

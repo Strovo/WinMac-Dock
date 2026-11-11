@@ -138,6 +138,7 @@ internal sealed partial class DockWindow : Window
     internal readonly string? MonitorOverride;
     private string SelectedMonitor => MonitorOverride ?? Settings.Monitor;
     internal string DisplayIdentity => monitor?.Identity ?? ResolveDisplay().Identity;
+    internal List<DockItem> DisplayPins => MonitorPinPolicy.ForDisplay(Settings.Items, DisplayIdentity);
     internal MonitorData ResolveDisplay()
     {
         var displays = Native.Monitors();
@@ -514,6 +515,7 @@ internal sealed partial class DockWindow : Window
         string? special = SpecialItemKey(item);
         if (ItemPreferences.Restore(Settings, item, special) is { } remembered) item = remembered;
         else if (special != null && special is not ("taskview" or "search")) BetaDefaults.ApplyProperties(item, DefaultSpecialItem(special));
+        item = MonitorPinPolicy.PrepareNewPin(Settings, item, DisplayIdentity, special);
         if (item.Kind == ItemKind.StartMenu) at = 0;
         if (special is "start" or "search" or "taskview" or "downloads" or "recyclebin") pendingModuleBounces.Add(item.Id);
         if (item.Kind is ItemKind.Search or ItemKind.TaskView) ModulePlacement.Pin(Settings.Items, item);
@@ -535,7 +537,7 @@ internal sealed partial class DockWindow : Window
     internal void PinFromFolder(DockItem item)
     {
         if (popupCount == 0) { AddItem(item); return; }
-        item = ItemPreferences.Restore(Settings, item, SpecialItemKey(item)) ?? item;
+        item = MonitorPinPolicy.PrepareNewPin(Settings, item, DisplayIdentity, SpecialItemKey(item));
         var before = Motion && Settings.AnimationMs > 0 && !dockOverflow ? CaptureRowScene() : null;
         // Keep existing buttons attached: the Downloads button anchors the
         // open flyout. Rebuild only the magnification surface around them.
@@ -612,7 +614,7 @@ internal sealed partial class DockWindow : Window
             windows = windows.OrderBy(w => { var i = previous.IndexOf(w.Handle); return i < 0 ? int.MaxValue : i; }).ToList();
             SyncUsbPinning();
             SyncDownloadPinning();
-            var orderedPins = DownloadPinLayout.OrderPins(Settings.Items);
+            var orderedPins = DownloadPinLayout.OrderPins(DisplayPins);
             var entries = TaskReconciler.Reconcile(orderedPins, windows, Settings.GroupWindows, Settings.CombinePinnedIconsWithRunningApplications, MinimizedOnly);
             if (StartupComplete && lastSignature.Length > 0 && Motion && Settings.AnimationMs > 0 && !hidden && !dragging && popupCount == 0
                 && (rowAnimating || !buttons.Select(b => b.Entry.Item.Id).SequenceEqual(entries.Where(e => e.Item.Kind != ItemKind.Separator).Select(e => e.Item.Id))
@@ -728,7 +730,7 @@ internal sealed partial class DockWindow : Window
     }
     private void SyncStackWatchers()
     {
-        var paths = Settings.Items.Where(x => x.Kind == ItemKind.Folder && (x.Folder.StackIcon || x.ShowThumbnail)).Select(x => x.Target).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var paths = DisplayPins.Where(x => x.Kind == ItemKind.Folder && (x.Folder.StackIcon || x.ShowThumbnail)).Select(x => x.Target).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var path in stackWatchers.Keys.Where(p => !paths.Contains(p)).ToArray()) { stackWatchers[path].Dispose(); stackWatchers.Remove(path); }
         foreach (var path in paths.Where(p => !stackWatchers.ContainsKey(p)))
         {
@@ -1045,6 +1047,7 @@ internal sealed partial class DockWindow : Window
         {
             if (entry.Item.Kind != ItemKind.Separator) TryAction(() =>
             {
+                if (entry.Item.Kind == ItemKind.StartMenu) { Native.OpenStartMenuForDock(Handle); return; }
                 KeepTaskViewOpenForDockLaunch();
                 if (Native.GetAsyncKeyState(0x11) < 0) ShellService.LaunchAsAdministrator(entry.Item);
                 else ShellService.LaunchWithoutElevation(entry.Item);
@@ -1124,6 +1127,7 @@ internal sealed partial class DockWindow : Window
         void Open()
         {
             if (entry.Item.Kind == ItemKind.Separator) return;
+            if (entry.Item.Kind == ItemKind.StartMenu) { Native.OpenStartMenuForDock(Handle); return; }
             if (pendingLaunches.TryGetValue(entry.Item.Id, out var started) && DateTime.UtcNow - started < TimeSpan.FromSeconds(2)) return;
             pendingLaunches[entry.Item.Id] = DateTime.UtcNow;
             KeepTaskViewOpenForDockLaunch();
@@ -2006,9 +2010,9 @@ internal sealed partial class DockWindow : Window
         SubMenu(addNewItem, "New separator", () => AddItem(new() { Kind = ItemKind.Separator, Name = "Separator" }, backgroundMenuInsertionSlot ?? PinInsertionIndex()));
         addNewItem.Items.Add(new MenuFlyoutSeparator());
         var modules = new MenuFlyoutSubItem { Text = "Modules", Icon = Glyph("\uE950") };
-        var hasRecycleBin = Settings.Items.Any(item => item.Kind == ItemKind.RecycleBin);
-        var hasDownloads = Settings.Items.Any(IsDownloads);
-        var hasStartMenu = Settings.Items.Any(item => item.Kind == ItemKind.StartMenu);
+        var hasRecycleBin = DisplayPins.Any(item => item.Kind == ItemKind.RecycleBin);
+        var hasDownloads = DisplayPins.Any(IsDownloads);
+        var hasStartMenu = DisplayPins.Any(item => item.Kind == ItemKind.StartMenu);
         var downloads = new MenuFlyoutItem { Text = "Downloads", IsEnabled = !hasDownloads, Icon = Glyph("\uE896") };
         downloads.Click += (_, _) => AddItem(new() { Kind = ItemKind.Folder, Name = "Downloads", Target = Native.Downloads(), Folder = new() { Sort = FolderSort.Modified, Descending = true } });
         modules.Items.Add(downloads);
@@ -2020,7 +2024,7 @@ internal sealed partial class DockWindow : Window
         modules.Items.Add(startMenu);
         foreach (var module in new[] { (ItemKind.TaskView, "Task View", "\uE7C4"), (ItemKind.Search, "Search", "\uE721") })
         {
-            var command = new MenuFlyoutItem { Text = module.Item2, Icon = Glyph(module.Item3), IsEnabled = !Settings.Items.Any(i => i.Kind == module.Item1) };
+            var command = new MenuFlyoutItem { Text = module.Item2, Icon = Glyph(module.Item3), IsEnabled = !DisplayPins.Any(i => i.Kind == module.Item1) };
             command.Click += (_, _) => AddItem(new() { Kind = module.Item1, Name = module.Item2 });
             modules.Items.Add(command);
         }
@@ -2117,7 +2121,7 @@ internal sealed partial class DockWindow : Window
         }
         if (!entry.IsPinned && entry.Windows.Count == 1 && entry.Window is { } additionalWindow
             && !ShellService.IsSystemSettings(entry.Item) && !ShellService.IsTaskManager(entry.Item)
-            && Settings.Items.Any(pin => TaskReconciler.Matches(pin, additionalWindow)))
+            && DisplayPins.Any(pin => TaskReconciler.Matches(pin, additionalWindow)))
         {
             var windowMenu = new MenuFlyout();
             TrackFlyout(windowMenu);
@@ -2357,10 +2361,10 @@ internal sealed partial class DockWindow : Window
     private void AddDownloadsOptions(MenuFlyout menu, DockItem item)
     {
         var options = new MenuFlyoutSubItem { Text = "Options" };
-        if (IsDownloads(item) && Settings.Items.Any(i => i.IsDownloadedPin && i.CapturePin == CapturePinKind.None))
+        if (IsDownloads(item) && DisplayPins.Any(i => i.IsDownloadedPin && i.CapturePin == CapturePinKind.None))
             Menu(menu, "Unpin downloaded files", () =>
             {
-                Settings.Items.RemoveAll(i => i.IsDownloadedPin && i.CapturePin == CapturePinKind.None);
+                Settings.Items.RemoveAll(i => MonitorPinPolicy.IsVisible(i, DisplayIdentity) && i.IsDownloadedPin && i.CapturePin == CapturePinKind.None);
                 Save(); Reconcile();
             }, "\uE77A");
         bool stack = item.ShowThumbnail || item.Folder.StackIcon;

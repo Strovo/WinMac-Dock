@@ -263,6 +263,7 @@ internal static class Native
     {
         TaskbarModuleTrigger.Open(kind);
     }
+    public static void OpenStartMenuForDock(nint owner, nint monitor = 0) => StartMenuRouting.Open(owner, monitor);
     public static void OpenStartMenu()
     {
         const uint wmSysCommand = 0x0112;

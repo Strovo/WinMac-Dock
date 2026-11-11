@@ -30,8 +30,16 @@ Este fork de [Asteski/WinMac-Dock](https://github.com/Asteski/WinMac-Dock) añad
 - Cada dock muestra únicamente las ventanas abiertas en ese monitor, incluso al agrupar varias ventanas de una aplicación.
 - Al mover una ventana entre pantallas, su entrada pasa al dock correspondiente.
 - Las ventanas minimizadas permanecen asociadas al monitor de su posición de restauración.
-- Los lanzadores anclados se mantienen en todos los docks; sus ventanas e indicadores de ejecución se calculan por monitor.
+- Las aplicaciones, archivos y carpetas que fijes ahora quedan anclados solo en el monitor del dock donde lo hagas. Puedes fijar la misma aplicación por separado en ambas pantallas y quitar un anclaje sin eliminar el otro.
+- Los anclajes anteriores a esta función y los módulos integrados conservan su ámbito global. Las ventanas e indicadores de ejecución siguen calculándose por monitor.
 - El reloj y la fecha se conservan en cada dock. El modo de un único monitor mantiene el comportamiento anterior.
+
+### Inicio en el monitor pulsado
+
+- El botón Inicio de cada dock abre el menú de Windows en esa pantalla, también con Shift y desde la acción de abrir del menú contextual.
+- Mientras Inicio está abierto, la barra de tareas se oculta y se mantiene temporalmente transparente para evitar que Explorer la haga visible. Al cerrar el menú se restaura su apariencia, respetando la opción de ocultación permanente.
+- Se guarda un registro de recuperación antes de modificar la transparencia; si el proceso termina de forma abrupta, el siguiente arranque restaura la apariencia pendiente.
+- Verificado mediante el botón real de ambos docks en Windows 11 x64. La selección de monitor utiliza interfaces privadas de Windows y puede requerir ajustes tras una actualización del sistema.
 
 ### Compilación y pruebas
 
@@ -41,6 +49,7 @@ Requiere Windows 11 y el **SDK de .NET 10** para compilar. Los recursos original
 dotnet publish src/WinMac.Dock/WinMac.Dock.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -o artifacts/WinMac-Dock-x64
 dotnet run --project tests/WinMac.Dock.Clock.Tests
 dotnet run --project tests/WinMac.Dock.Clock.UI.Tests
+dotnet run --project tests/WinMac.Dock.Pinning.Tests
 ```
 
 Ejecuta `artifacts/WinMac-Dock-x64/WinMac.Dock.exe` y conserva todos los archivos de la carpeta publicada. La compilación incluye los runtimes de .NET y Windows App SDK. Esta variante se ha compilado y probado en **Windows 11 x64**; no se ha verificado ARM64.
@@ -55,6 +64,7 @@ Con el dock ejecutándose en modo **All Monitors**, la prueba de integración re
 
 ```powershell
 powershell -NoProfile -File tests/VerifyMonitorDocks.ps1 -ReportDirectory C:/ruta/a/informe-monitores
+powershell -NoProfile -File tests/VerifyDockStartClicks.ps1 -ReportDirectory C:/ruta/a/informe-inicio
 ```
 
 Las pruebas del reloj y la integración en dos monitores se han ejecutado localmente. Los informes generados y las copias de la instalación no se versionan. Consulta [tests/README.md](tests/README.md) para más detalles sobre las pruebas del reloj.
@@ -91,7 +101,7 @@ Las pruebas del reloj y la integración en dos monitores se han ejecutado localm
 
 - **Clock in dock:** Enable the digital clock in _Settings → General → Clock in dock_. It displays the local time and a compact date after the last dock icon, supports 12/24-hour time and optional seconds, and follows the dock's theme, position and visibility. It is part of the dock, not a floating widget.
 
-- **Positioning and displays:** Place the dock along the top, bottom, left or right edge; adjust alignment, float it away from the edge, or span the full edge. Show it on one display or across all monitors, with independent positioning and behavior per display. In _All Monitors_ mode, each dock shows running windows from its own monitor only; pinned launchers remain on every dock. Moving a window between monitors moves its running entry, and minimized windows remain associated with their restore monitor.
+- **Positioning and displays:** Place the dock along the top, bottom, left or right edge; adjust alignment, float it away from the edge, or span the full edge. Show it on one display or across all monitors, with independent positioning and behavior per display. In _All Monitors_ mode, each dock shows running windows from its own monitor only. New application, file and folder pins belong to the monitor where they were added; legacy pins and built-in modules remain shared. Moving a window between monitors moves its running entry, and minimized windows remain associated with their restore monitor.
 
 - **Window management:** Activate, minimize, restore or close windows from the dock. Optionally group windows by application, display only minimized applications, and direct Windows minimize/restore animations toward their dock icons.
 
