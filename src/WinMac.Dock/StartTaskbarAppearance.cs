@@ -48,6 +48,10 @@ internal sealed class StartTaskbarAppearance : IDisposable
     internal static void Recover() => Recover(FilePath);
     internal static void Recover(string filePath, Action? restore = null)
     {
+        lock (TaskbarOpacity.Gate) RecoverCore(filePath, restore);
+    }
+    private static void RecoverCore(string filePath, Action? restore)
+    {
         using var journalLock = new JournalLock(filePath);
         if (!File.Exists(filePath)) return;
         Journal? journal;
@@ -73,6 +77,10 @@ internal sealed class StartTaskbarAppearance : IDisposable
     }
     internal static StartTaskbarAppearance Acquire(IEnumerable<nint> handles)
     {
+        lock (TaskbarOpacity.Gate) return AcquireCore(handles);
+    }
+    private static StartTaskbarAppearance AcquireCore(IEnumerable<nint> handles)
+    {
         Recover();
         var bars = new List<Bar>();
         foreach (var handle in handles)
@@ -82,6 +90,15 @@ internal sealed class StartTaskbarAppearance : IDisposable
             uint key = 0, flags = 2; byte alpha = 255;
             if (layered && !GetLayeredWindowAttributes(handle, out key, out alpha, out flags))
                 throw new InvalidOperationException("Could not capture existing taskbar opacity.");
+            // Journal the underlying original appearance, not permanent alpha zero.
+            // Dispose chooses zero while permanent ownership is still active; if
+            // Hide is switched off during Start it restores this true original.
+            var permanent = TaskbarOpacity.Permanent(handle);
+            if (permanent != null)
+            {
+                layered = permanent.WasLayered; key = permanent.Key;
+                alpha = permanent.Alpha; flags = permanent.Flags;
+            }
             bars.Add(new(handle.ToInt64(), pid, ProcessStart((int)pid), layered, key, alpha, flags, IsWindowVisible(handle)));
         }
         var value = new Journal(Environment.ProcessId, ProcessStart(Environment.ProcessId), bars);
@@ -92,6 +109,7 @@ internal sealed class StartTaskbarAppearance : IDisposable
             foreach (var bar in bars)
             {
                 nint handle = (nint)bar.Handle;
+                new TaskbarOpacity(bar.Handle, bar.ProcessId, bar.ProcessStart, bar.WasLayered, bar.Key, bar.Alpha, bar.Flags).BeginTemporary();
                 SetWindowLongPtrW(handle, -20, (nint)(GetWindowLongPtrW(handle, -20).ToInt64() | Layered));
                 if (!SetLayeredWindowAttributes(handle, 0, 0, 2)) throw new InvalidOperationException("Windows rejected temporary taskbar transparency.");
                 if (!GetLayeredWindowAttributes(handle, out _, out byte actual, out uint actualFlags) || actual != 0 || (actualFlags & 2) == 0)
@@ -121,12 +139,22 @@ internal sealed class StartTaskbarAppearance : IDisposable
     }
     private static void Restore(Journal value, bool restoreVisibility)
     {
+        lock (TaskbarOpacity.Gate) RestoreCore(value, restoreVisibility);
+    }
+    private static void RestoreCore(Journal value, bool restoreVisibility)
+    {
         foreach (var bar in value.Bars)
         {
             nint handle = (nint)bar.Handle;
+            TaskbarOpacity.EndTemporary(handle);
             if (!IsWindow(handle)) continue;
             GetWindowThreadProcessId(handle, out uint pid);
             if (pid != bar.ProcessId || !Alive((int)pid, bar.ProcessStart)) continue;
+            if (TaskbarOpacity.Permanent(handle) != null)
+            {
+                TaskbarOpacity.MakeTransparent(handle);
+                continue;
+            }
             long style = GetWindowLongPtrW(handle, -20).ToInt64();
             if (bar.WasLayered)
             {
@@ -142,6 +170,10 @@ internal sealed class StartTaskbarAppearance : IDisposable
         }
     }
     public void Dispose()
+    {
+        lock (TaskbarOpacity.Gate) DisposeCore();
+    }
+    private void DisposeCore()
     {
         using var journalLock = new JournalLock(FilePath);
         if (disposed) return;

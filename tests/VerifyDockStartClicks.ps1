@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$ReportDirectory)
+param([Parameter(Mandatory=$true)][string]$ReportDirectory, [int]$TargetProcessId=0)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type @'
@@ -33,7 +33,7 @@ $report = @{Passed=$false; Error=$null; Docks=@()}
 $opened = $false
 try {
     if ([DockStartClickNative]::StartWindows().Count -gt 0) { throw 'Start is already open; refusing to close the user surface.' }
-    $process = Get-Process -Name 'WinMac.Dock' -ErrorAction Stop
+    $process = if ($TargetProcessId -ne 0) { Get-Process -Id $TargetProcessId -ErrorAction Stop } else { Get-Process -Name 'WinMac.Dock' -ErrorAction Stop }
     $docks = [DockStartClickNative]::Docks($process.Id)
     if ($docks.Count -ne 2) { throw 'Expected two running dock windows.' }
     foreach ($handle in $docks) {

@@ -6,10 +6,12 @@ namespace WinMac.Dock;
 internal sealed class WindowsTaskbar : IDisposable
 {
     private sealed record SavedState(Dictionary<string, bool> Visibility,
-        Dictionary<string, TaskbarConfiguration>? Configuration = null);
+        Dictionary<string, TaskbarConfiguration>? Configuration = null,
+        Dictionary<string, TaskbarOpacity>? Opacity = null);
     private readonly string recoveryFile = Path.Combine(Log.DirectoryPath, "taskbar-visibility.json");
     private readonly Dictionary<string, bool> originalVisibility = [];
     private readonly Dictionary<string, TaskbarConfiguration> originalConfiguration = [];
+    private readonly Dictionary<string, TaskbarOpacity> originalOpacity = [];
     private bool active, failed, syncing;
     private long nextRestoreAttempt;
     internal string? Error { get; private set; }
@@ -76,8 +78,18 @@ internal sealed class WindowsTaskbar : IDisposable
         try
         {
             Directory.CreateDirectory(Log.DirectoryPath);
-            File.WriteAllText(recoveryFile + ".tmp", JsonSerializer.Serialize(new SavedState(originalVisibility, originalConfiguration)));
-            File.Move(recoveryFile + ".tmp", recoveryFile, true); return true;
+            string temporary = recoveryFile + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    JsonSerializer.Serialize(stream, new SavedState(originalVisibility, originalConfiguration, originalOpacity));
+                    stream.Flush(true);
+                }
+                File.Move(temporary, recoveryFile, true);
+            }
+            finally { File.Delete(temporary); }
+            return true;
         }
         catch (Exception ex) { Log.Write(ex); Error = "Could not save the taskbar recovery settings."; return false; }
     }
@@ -91,6 +103,8 @@ internal sealed class WindowsTaskbar : IDisposable
             foreach (var pair in saved.Visibility) originalVisibility[pair.Key] = pair.Value;
             if (saved.Configuration != null)
                 foreach (var pair in saved.Configuration) originalConfiguration[pair.Key] = pair.Value;
+            if (saved.Opacity != null)
+                foreach (var pair in saved.Opacity) originalOpacity[pair.Key] = pair.Value;
             active = true; Restore(force: true); if (active) failed = true;
         }
         catch (Exception ex) { Log.Write(ex); Error = ex.Message; failed = true; }
@@ -99,7 +113,7 @@ internal sealed class WindowsTaskbar : IDisposable
     {
         if (syncing) return false;
         syncing = true;
-        try { return SyncCore(hide); }
+        try { lock (TaskbarOpacity.Gate) return SyncCore(hide); }
         finally { syncing = false; }
     }
     private bool SyncCore(bool hide)
@@ -114,6 +128,14 @@ internal sealed class WindowsTaskbar : IDisposable
             // A pending recovery must be completed before starting a new lease.
             if (!active && File.Exists(recoveryFile)) { Recover(); if (active || failed) return false; }
             var added = new List<string>();
+            var opacityBefore = new Dictionary<string, TaskbarOpacity>(originalOpacity);
+            bool opacityChanged = false;
+            foreach (var bar in bars)
+                if (!originalOpacity.TryGetValue(bar.Key, out var opacity) || !opacity.Matches(bar.Handle))
+                {
+                    originalOpacity[bar.Key] = TaskbarOpacity.Capture(bar.Handle);
+                    opacityChanged = true;
+                }
             foreach (var bar in bars)
                 if (!originalVisibility.ContainsKey(bar.Key))
                 {
@@ -129,13 +151,17 @@ internal sealed class WindowsTaskbar : IDisposable
                 }
             // Persist before touching Explorer, including the original position
             // and complete auto-hide/always-on-top state, for crash recovery.
-            if ((!active || added.Count > 0) && !SaveRecovery())
+            if ((!active || added.Count > 0 || opacityChanged) && !SaveRecovery())
             {
                 foreach (string key in added) { originalVisibility.Remove(key); originalConfiguration.Remove(key); }
+                originalOpacity.Clear();
+                foreach (var pair in opacityBefore) originalOpacity[pair.Key] = pair.Value;
                 failed = true; return false;
             }
             active = true;
             if (changed || added.Count > 0) SetSuppressed?.Invoke(false);
+            // Establish opacity before any appbar/visibility operation can reveal Explorer.
+            foreach (var bar in bars) originalOpacity[bar.Key].Suppress();
             // All displays must reach the bottom before changing global auto-hide.
             foreach (var bar in bars)
             {
@@ -176,6 +202,9 @@ internal sealed class WindowsTaskbar : IDisposable
                 if (originalConfiguration.TryGetValue(bar.Key, out var config)) config.Restore(new Configuration(bar.Handle));
             }
             catch (Exception ex) { if (Error != ex.Message) Log.Write(ex); Error = ex.Message; restored = false; }
+            // Opacity recovery must not depend on appbar settings being readable.
+            try { if (originalOpacity.TryGetValue(bar.Key, out var opacity)) opacity.Restore(); }
+            catch (Exception ex) { if (Error != ex.Message) Log.Write(ex); Error = ex.Message; restored = false; }
             if (originalVisibility.TryGetValue(bar.Key, out bool visible)) Native.ShowWindow(bar.Handle, visible ? 8 : 0);
         }
         // Keep the journal for disconnected displays as well as failed restores.
@@ -184,9 +213,9 @@ internal sealed class WindowsTaskbar : IDisposable
         {
             try { File.Delete(recoveryFile); }
             catch (Exception ex) { Log.Write(ex); Error = ex.Message; return true; }
-            active = false; originalVisibility.Clear(); originalConfiguration.Clear();
+            active = false; originalVisibility.Clear(); originalConfiguration.Clear(); originalOpacity.Clear();
         }
         return true;
     }
-    public void Dispose() => Restore(force: true);
+    public void Dispose() { lock (TaskbarOpacity.Gate) Restore(force: true); }
 }

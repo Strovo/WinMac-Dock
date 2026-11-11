@@ -41,6 +41,13 @@ Este fork de [Asteski/WinMac-Dock](https://github.com/Asteski/WinMac-Dock) añad
 - Se guarda un registro de recuperación antes de modificar la transparencia; si el proceso termina de forma abrupta, el siguiente arranque restaura la apariencia pendiente.
 - Verificado mediante el botón real de ambos docks en Windows 11 x64. La selección de monitor utiliza interfaces privadas de Windows y puede requerir ajustes tras una actualización del sistema.
 
+### Alertas sin mostrar la barra de tareas
+
+- Con **Settings → General → Hide Windows taskbar** activado, una aplicación que solicite atención ya no debe hacer visible la barra de Windows: la ocultación mantiene también su transparencia durante todo el tiempo que esté activa.
+- No se bloquean las alertas de las aplicaciones ni el seguimiento de atención del dock. Se conserva la apariencia original de cada barra para restaurarla al desactivar la ocultación, cerrar el dock o recuperar un cierre inesperado.
+- La ocultación permanente y la apertura temporal de Inicio coordinan su transparencia para que cerrar Inicio no vuelva a mostrar la barra.
+- Verificado con solicitudes reales `FlashWindowEx` en dos monitores, cambios de ocultación, apertura de Inicio y recuperación tras terminar un proceso de prueba. No se ha forzado un reinicio de Explorer ni una desconexión física de monitores.
+
 ### Compilación y pruebas
 
 Requiere Windows 11 y el **SDK de .NET 10** para compilar. Los recursos originales necesarios y los scripts de compilación se incluyen en este fork; su procedencia está documentada en [build/RESOURCE-SOURCES.md](build/RESOURCE-SOURCES.md).

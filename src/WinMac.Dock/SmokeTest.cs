@@ -55,6 +55,7 @@ public partial class App
             }, 0);
             Require(!floatingClock, "No floating clock window exists");
             await VerifyMonitorPinning(checks);
+            await VerifyTaskbarAttention(checks);
             Dock.HandleCommand("--settings");
             await Task.Delay(1500);
             bool settingsVisible = false;

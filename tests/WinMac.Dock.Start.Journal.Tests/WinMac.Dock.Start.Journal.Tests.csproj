@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
-  <ItemGroup><Compile Include="../../src/WinMac.Dock/StartTaskbarAppearance.cs" Link="StartTaskbarAppearance.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../src/WinMac.Dock/TaskbarOpacity.cs" Link="TaskbarOpacity.cs"/><Compile Include="../../src/WinMac.Dock/StartTaskbarAppearance.cs" Link="StartTaskbarAppearance.cs" /></ItemGroup>
 </Project>
