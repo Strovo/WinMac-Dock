@@ -25,7 +25,7 @@ public partial class App
             var date = clock.DateLabel;
             Require(time.Text.Length > 0 && date.Text.Length > 0, "Clock time and date rendered");
             var before = time.Text;
-            await Task.Delay(1400);
+            for (int attempt = 0; attempt < 20 && before == time.Text; attempt++) await Task.Delay(250);
             Require(before != time.Text, "Clock timer advances");
             foreach (var edge in Enum.GetValues<DockEdge>())
             {
@@ -54,7 +54,9 @@ public partial class App
                 return true;
             }, 0);
             Require(!floatingClock, "No floating clock window exists");
+            await VerifyRowStress(checks);
             await VerifyMonitorPinning(checks);
+            Dock.VerifyInterruptedRowCleanup(checks);
             await VerifyTaskbarAttention(checks);
             Dock.HandleCommand("--settings");
             await Task.Delay(1500);

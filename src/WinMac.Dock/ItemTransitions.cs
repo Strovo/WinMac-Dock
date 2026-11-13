@@ -336,6 +336,20 @@ internal sealed partial class DockWindow
             root.UpdateLayout(); ClearRowArtwork();
             rowResumeGrowth = null;
         }
-        finally { hoverRebuilding = false; rowFinishing = false; }
+        finally
+        {
+            try
+            {
+                // Reconcile may have started a replacement tween. Its artwork
+                // belongs to that tween; otherwise retire the old cover even if
+                // layout, reconciliation or a synchronous XAML callback failed.
+                if (!rowAnimating)
+                {
+                    StopRowTransition();
+                    rowResumeGrowth = null;
+                }
+            }
+            finally { hoverRebuilding = false; rowFinishing = false; }
+        }
     }
 }
